@@ -3,6 +3,7 @@ import { getPool } from './db.js';
 import { authMiddleware, signToken, verifyUser } from './auth.js';
 import bcrypt from 'bcryptjs';
 import { v4 as uuid } from 'uuid';
+import { sendContactEmail, sendMeetingRequestEmail } from './emailService.js';
 
 const router = Router();
 
@@ -1095,7 +1096,7 @@ router.post('/crm/opportunities', authMiddleware, async (req, res) => {
 router.post('/contact', async (req, res) => {
   const pool = getPool();
   const { name, email, firm, phone, comments = '' } = req.body;
-  
+
   const contact = {
     id: uuid(),
     name,
@@ -1106,17 +1107,43 @@ router.post('/contact', async (req, res) => {
     created_at: new Date().toISOString()
   };
 
-  if (!pool) {
-    mem.contacts.unshift(contact);
-    return res.json({ ok: true });
-  }
+  try {
+    // Save to database
+    if (!pool) {
+      mem.contacts.unshift(contact);
+    } else {
+      await pool.query(
+        'INSERT INTO contact_submissions(id, name, email, firm, phone, comments, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+        [contact.id, contact.name, contact.email, contact.firm, contact.phone, contact.comments, contact.created_at]
+      );
+    }
 
-  await pool.query(
-    'INSERT INTO contact_submissions(id, name, email, firm, phone, comments, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-    [contact.id, contact.name, contact.email, contact.firm, contact.phone, contact.comments, contact.created_at]
-  );
-  
-  res.json({ ok: true });
+    // Send email notification
+    await sendContactEmail({ name, email, firm, phone, comments });
+
+    res.json({ ok: true, message: 'Contact form submitted and email sent successfully' });
+  } catch (error) {
+    console.error('Error processing contact submission:', error);
+    res.status(500).json({ error: 'Failed to process contact submission' });
+  }
+});
+
+// Meeting request submissions
+router.post('/meeting-request', async (req, res) => {
+  const { advisor, advisors, name, email, phone, notes, selectedTimes } = req.body;
+
+  try {
+    // Handle both old (advisor) and new (advisors) format
+    const finalAdvisors = advisors || (advisor ? [advisor] : []);
+
+    // Send email notification
+    await sendMeetingRequestEmail({ advisors: finalAdvisors, name, email, phone, notes, selectedTimes });
+
+    res.json({ ok: true, message: 'Meeting request sent successfully' });
+  } catch (error) {
+    console.error('Error processing meeting request:', error);
+    res.status(500).json({ error: 'Failed to process meeting request' });
+  }
 });
 
 // AI Assistant endpoints
