@@ -1,29 +1,32 @@
-import nodemailer from 'nodemailer';
+/**
+ * Email Service using cPanel PHP Relay
+ *
+ * Since GoDaddy blocks SMTP connections from Render's IP addresses,
+ * we use a PHP script on cPanel to relay emails. The PHP script runs
+ * on the same server as GoDaddy's email system, so it's not blocked.
+ */
 
-// Create transporter with GoDaddy SMTP settings (using smtpout server)
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtpout.secureserver.net',
-  port: parseInt(process.env.SMTP_PORT) || 587,
-  secure: false, // Use STARTTLS
-  requireTLS: true,
-  auth: {
-    user: process.env.SMTP_USER || 'asmith@beyond26advisors.com',
-    pass: process.env.SMTP_PASS,
-  },
-  tls: {
-    rejectUnauthorized: false,
-    ciphers: 'SSLv3'
-  }
-});
+const CPANEL_EMAIL_RELAY = process.env.CPANEL_EMAIL_RELAY || 'https://beyond26advisors.com/send-email.php';
 
-// Verify transporter configuration
-transporter.verify((error, success) => {
-  if (error) {
-    console.error('Email transporter configuration error:', error);
-  } else {
-    console.log('✅ Email server is ready to send messages');
+/**
+ * Send email via cPanel PHP relay
+ */
+async function sendViaRelay(emailData) {
+  const response = await fetch(CPANEL_EMAIL_RELAY, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(emailData)
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(error.error || 'Failed to send email');
   }
-});
+
+  return await response.json();
+}
 
 /**
  * Send contact form submission email
@@ -85,8 +88,8 @@ export async function sendContactEmail(formData) {
 </html>
   `.trim();
 
-  const mailOptions = {
-    from: `"Beyond26 Website" <${process.env.EMAIL_FROM || 'asmith@beyond26advisors.com'}>`,
+  const emailData = {
+    from: process.env.EMAIL_FROM || 'asmith@beyond26advisors.com',
     to: [process.env.EMAIL_TO_ALEX || 'asmith@beyond26advisors.com', process.env.EMAIL_TO_EDGAR || 'esmith@beyond26advisors.com'].join(', '),
     replyTo: email,
     subject: 'WEBSITE: Message Received',
@@ -103,9 +106,9 @@ ${comments}
   };
 
   try {
-    const info = await transporter.sendMail(mailOptions);
-    console.log('✅ Contact email sent:', info.messageId);
-    return { success: true, messageId: info.messageId };
+    const result = await sendViaRelay(emailData);
+    console.log('✅ Contact email sent via cPanel relay');
+    return { success: true };
   } catch (error) {
     console.error('❌ Error sending contact email:', error);
     throw error;
@@ -209,8 +212,8 @@ export async function sendMeetingRequestEmail(meetingData) {
 </html>
   `.trim();
 
-  const mailOptions = {
-    from: `"Beyond26 Website" <${process.env.EMAIL_FROM || 'asmith@beyond26advisors.com'}>`,
+  const emailData = {
+    from: process.env.EMAIL_FROM || 'asmith@beyond26advisors.com',
     to: [process.env.EMAIL_TO_ALEX || 'asmith@beyond26advisors.com', process.env.EMAIL_TO_EDGAR || 'esmith@beyond26advisors.com'].join(', '),
     replyTo: email,
     subject: 'WEBSITE: Meeting Requested',
@@ -230,9 +233,9 @@ ${notes ? `Notes:\n${notes}` : ''}
   };
 
   try {
-    const info = await transporter.sendMail(mailOptions);
-    console.log('✅ Meeting request email sent:', info.messageId);
-    return { success: true, messageId: info.messageId };
+    const result = await sendViaRelay(emailData);
+    console.log('✅ Meeting request email sent via cPanel relay');
+    return { success: true };
   } catch (error) {
     console.error('❌ Error sending meeting request email:', error);
     throw error;
