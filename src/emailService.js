@@ -1,32 +1,23 @@
 /**
- * Email Service using cPanel PHP Relay
+ * Email Service using Resend
  *
- * Since GoDaddy blocks SMTP connections from Render's IP addresses,
- * we use a PHP script on cPanel to relay emails. The PHP script runs
- * on the same server as GoDaddy's email system, so it's not blocked.
+ * Resend is a reliable email API service that works from any server.
+ * No SMTP issues, no IP blocking, no GoDaddy/Office365 restrictions.
+ *
+ * Setup: https://resend.com/signup
+ * 1. Sign up for free account
+ * 2. Get API key from https://resend.com/api-keys
+ * 3. Add domain at https://resend.com/domains and verify DNS
+ * 4. Set RESEND_API_KEY in Render environment variables
  */
 
-const CPANEL_EMAIL_RELAY = process.env.CPANEL_EMAIL_RELAY || 'https://beyond26advisors.com/send-email.php';
+import { Resend } from 'resend';
 
-/**
- * Send email via cPanel PHP relay
- */
-async function sendViaRelay(emailData) {
-  const response = await fetch(CPANEL_EMAIL_RELAY, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(emailData)
-  });
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Unknown error' }));
-    throw new Error(error.error || 'Failed to send email');
-  }
-
-  return await response.json();
-}
+const EMAIL_FROM = process.env.EMAIL_FROM || 'asmith@beyond26advisors.com';
+const EMAIL_TO_ALEX = process.env.EMAIL_TO_ALEX || 'asmith@beyond26advisors.com';
+const EMAIL_TO_EDGAR = process.env.EMAIL_TO_EDGAR || 'esmith@beyond26advisors.com';
 
 /**
  * Send contact form submission email
@@ -52,7 +43,7 @@ export async function sendContactEmail(formData) {
     <div class="container">
       <div class="header">
         <h1 style="margin: 0; font-size: 28px;">Beyond26 Investment Advisors</h1>
-        <p style="margin: 10px 0 0 0; font-size: 16px;">WEBSITE: Message Received</p>
+        <p style="margin: 10px 0 0 0; font-size: 16px;">Message Received</p>
       </div>
       <div class="content">
         <div class="field">
@@ -88,27 +79,22 @@ export async function sendContactEmail(formData) {
 </html>
   `.trim();
 
-  const emailData = {
-    from: process.env.EMAIL_FROM || 'asmith@beyond26advisors.com',
-    to: [process.env.EMAIL_TO_ALEX || 'asmith@beyond26advisors.com', process.env.EMAIL_TO_EDGAR || 'esmith@beyond26advisors.com'].join(', '),
-    replyTo: email,
-    subject: 'WEBSITE: Message Received',
-    html: emailContent,
-    text: `
-Name: ${name}
-${firm ? `Firm: ${firm}` : ''}
-Email: ${email}
-${phone ? `Phone: ${phone}` : ''}
-
-Message:
-${comments}
-    `.trim()
-  };
-
   try {
-    const result = await sendViaRelay(emailData);
-    console.log('✅ Contact email sent via cPanel relay');
-    return { success: true };
+    const { data, error } = await resend.emails.send({
+      from: `Beyond26 Website <${EMAIL_FROM}>`,
+      to: [EMAIL_TO_ALEX, EMAIL_TO_EDGAR],
+      replyTo: email,
+      subject: 'WEBSITE: Message Received',
+      html: emailContent,
+    });
+
+    if (error) {
+      console.error('❌ Resend error:', error);
+      throw new Error(error.message || 'Failed to send email');
+    }
+
+    console.log('✅ Contact email sent via Resend:', data.id);
+    return { success: true, emailId: data.id };
   } catch (error) {
     console.error('❌ Error sending contact email:', error);
     throw error;
@@ -163,7 +149,7 @@ export async function sendMeetingRequestEmail(meetingData) {
     <div class="container">
       <div class="header">
         <h1 style="margin: 0; font-size: 28px;">Beyond26 Investment Advisors</h1>
-        <p style="margin: 10px 0 0 0; font-size: 16px;">WEBSITE: Meeting Requested</p>
+        <p style="margin: 10px 0 0 0; font-size: 16px;">Meeting Requested</p>
       </div>
       <div class="content">
         <div class="field">
@@ -212,30 +198,22 @@ export async function sendMeetingRequestEmail(meetingData) {
 </html>
   `.trim();
 
-  const emailData = {
-    from: process.env.EMAIL_FROM || 'asmith@beyond26advisors.com',
-    to: [process.env.EMAIL_TO_ALEX || 'asmith@beyond26advisors.com', process.env.EMAIL_TO_EDGAR || 'esmith@beyond26advisors.com'].join(', '),
-    replyTo: email,
-    subject: 'WEBSITE: Meeting Requested',
-    html: emailContent,
-    text: `
-Meeting With: ${advisorNames || 'Not specified'}
-Requested By: ${name}
-Email: ${email}
-${firm ? `Firm: ${firm}` : ''}
-${phone ? `Phone: ${phone}` : ''}
-
-Suggested Meeting Times:
-${selectedTimes.map((time, index) => `${index + 1}. ${time}`).join('\n')}
-
-${notes ? `Notes:\n${notes}` : ''}
-    `.trim()
-  };
-
   try {
-    const result = await sendViaRelay(emailData);
-    console.log('✅ Meeting request email sent via cPanel relay');
-    return { success: true };
+    const { data, error } = await resend.emails.send({
+      from: `Beyond26 Website <${EMAIL_FROM}>`,
+      to: [EMAIL_TO_ALEX, EMAIL_TO_EDGAR],
+      replyTo: email,
+      subject: 'WEBSITE: Meeting Requested',
+      html: emailContent,
+    });
+
+    if (error) {
+      console.error('❌ Resend error:', error);
+      throw new Error(error.message || 'Failed to send email');
+    }
+
+    console.log('✅ Meeting request email sent via Resend:', data.id);
+    return { success: true, emailId: data.id };
   } catch (error) {
     console.error('❌ Error sending meeting request email:', error);
     throw error;
