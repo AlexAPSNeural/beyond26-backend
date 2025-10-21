@@ -1,16 +1,18 @@
 import nodemailer from 'nodemailer';
 
-// Create transporter with GoDaddy SMTP relay settings
+// Create transporter with GoDaddy SMTP settings (using smtpout server)
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'relay-hosting.secureserver.net',
-  port: parseInt(process.env.SMTP_PORT) || 25,
-  secure: false, // Use TLS
+  host: process.env.SMTP_HOST || 'smtpout.secureserver.net',
+  port: parseInt(process.env.SMTP_PORT) || 587,
+  secure: false, // Use STARTTLS
+  requireTLS: true,
   auth: {
     user: process.env.SMTP_USER || 'asmith@beyond26advisors.com',
     pass: process.env.SMTP_PASS,
   },
   tls: {
-    rejectUnauthorized: false
+    rejectUnauthorized: false,
+    ciphers: 'SSLv3'
   }
 });
 
